@@ -1,0 +1,174 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="description" content="A browser-only dashboard for exploring synthetic SSH authentication logs and highlighting repeated failed logins.">
+  <meta name="theme-color" content="#0d1117">
+  <title>AuthWatch — Security Log Dashboard</title>
+  <style>
+    :root { color-scheme: dark; --bg:#0d1117; --panel:#141b24; --panel2:#10161e; --line:#263241; --muted:#96a4b5; --text:#edf3f8; --green:#62e0b1; --red:#ff7785; --amber:#f3c878; --blue:#84b7ff; --radius:16px; }
+    * { box-sizing:border-box }
+    body { margin:0; background:radial-gradient(ellipse at 75% -20%,#182b39 0,transparent 38%),var(--bg); color:var(--text); font:15px/1.55 Inter,ui-sans-serif,system-ui,-apple-system,BlinkMacSystemFont,"Segoe UI",sans-serif; }
+    button,input,select { font:inherit }
+    button { cursor:pointer }
+    .wrap { width:min(1180px,calc(100% - 40px)); margin:auto }
+    header { border-bottom:1px solid #202b38; background:#0d1117d9; }
+    .topbar { height:76px; display:flex; align-items:center; justify-content:space-between; gap:20px }
+    .brand { display:flex; align-items:center; gap:12px; font-weight:750; letter-spacing:.02em }
+    .brand-mark { display:grid; place-items:center; width:38px; height:38px; border:1px solid #325445; border-radius:12px; color:var(--green); background:#12221e; font-size:19px }
+    .brand small { display:block; color:var(--muted); font-weight:500; font-size:11px; letter-spacing:.13em; text-transform:uppercase }
+    .local-badge { padding:7px 11px; border:1px solid #275640; color:#a7f0d1; background:#10251d; border-radius:99px; font-size:12px; white-space:nowrap }
+    main { padding:42px 0 60px }
+    .intro { display:flex; justify-content:space-between; align-items:end; gap:28px; margin-bottom:26px }
+    .eyebrow { color:var(--green); font-size:12px; font-weight:700; letter-spacing:.16em; text-transform:uppercase }
+    h1 { margin:8px 0 8px; font-size:clamp(30px,5vw,46px); line-height:1.1; letter-spacing:-.045em }
+    .intro p { margin:0; max-width:660px; color:var(--muted) }
+    .actions { display:flex; flex-wrap:wrap; gap:10px; justify-content:flex-end }
+    .btn { border:1px solid #344355; border-radius:10px; background:#1a2430; color:var(--text); padding:10px 14px; font-weight:650; transition:.15s ease }
+    .btn:hover { border-color:#6381a1; transform:translateY(-1px) }
+    .btn.primary { color:#0d1915; border-color:var(--green); background:var(--green) }
+    .btn:focus-visible,select:focus-visible,input:focus-visible { outline:2px solid var(--green); outline-offset:2px }
+    #fileInput { display:none }
+    .notice { display:flex; align-items:flex-start; gap:12px; margin:20px 0 24px; padding:13px 16px; border:1px solid #30445b; border-radius:12px; background:#111b28; color:#c4d3e2; font-size:13px }
+    .notice b { color:var(--blue) }
+    .notice .icon { color:var(--blue); font-size:17px }
+    .metrics { display:grid; grid-template-columns:repeat(4,1fr); gap:14px; margin-bottom:16px }
+    .card { border:1px solid var(--line); border-radius:var(--radius); background:linear-gradient(145deg,#17212c,#121821); }
+    .metric { min-height:123px; padding:18px 20px }
+    .metric-label { display:flex; justify-content:space-between; color:var(--muted); font-size:13px }
+    .metric-value { margin-top:8px; font-size:32px; font-weight:750; letter-spacing:-.04em }
+    .metric-note { color:#758496; font-size:12px }
+    .metric .signal { color:var(--green) }
+    .metric.alert .signal { color:var(--red) }
+    .grid { display:grid; grid-template-columns:1.08fr .92fr; gap:16px; margin-bottom:16px }
+    .section { padding:20px }
+    .section-head { display:flex; align-items:flex-start; justify-content:space-between; gap:16px; margin-bottom:18px }
+    h2 { margin:0; font-size:17px; letter-spacing:-.02em }
+    .sub { margin:4px 0 0; color:var(--muted); font-size:12px }
+    .threshold { display:flex; align-items:center; gap:9px; color:var(--muted); font-size:12px; white-space:nowrap }
+    select,.search { color:var(--text); border:1px solid #344355; border-radius:9px; background:#0f151d; padding:8px 10px }
+    .chart { display:flex; align-items:end; gap:12px; height:174px; padding:8px 4px 0; border-bottom:1px solid #34404e; overflow-x:auto }
+    .bar-item { display:flex; flex:1 0 42px; max-width:90px; height:100%; flex-direction:column; justify-content:end; align-items:center; gap:7px }
+    .bar-value { color:#dbe7f2; font-size:11px; font-variant-numeric:tabular-nums }
+    .bar { width:min(34px,70%); min-height:3px; border-radius:6px 6px 2px 2px; background:linear-gradient(180deg,#ff8890,#cf4e66); box-shadow:0 0 18px #ef647522; transition:height .25s ease }
+    .bar-label { width:100%; padding-bottom:8px; overflow:hidden; color:var(--muted); text-align:center; text-overflow:ellipsis; white-space:nowrap; font:11px ui-monospace,SFMono-Regular,Menlo,monospace }
+    .empty-chart { width:100%; align-self:center; color:var(--muted); text-align:center; font-size:13px }
+    .alerts { display:grid; gap:10px; max-height:232px; overflow:auto }
+    .alert-row { display:flex; justify-content:space-between; align-items:center; gap:12px; padding:11px 12px; border:1px solid #49343a; border-radius:11px; background:#21191d }
+    .alert-ip { font:13px ui-monospace,SFMono-Regular,Menlo,monospace }
+    .alert-user { color:var(--muted); font-size:11px }
+    .pill { border-radius:99px; padding:4px 9px; color:#ffb4ba; background:#512a33; font-size:11px; font-weight:700; white-space:nowrap }
+    .no-alert { padding:25px 10px; color:var(--muted); text-align:center; font-size:13px }
+    .events { padding:20px 0 0; overflow:hidden }
+    .events .section-head { padding:0 20px; align-items:center }
+    .tools { display:flex; gap:9px; flex-wrap:wrap; justify-content:flex-end }
+    .search { width:min(220px,50vw); }
+    .table-wrap { overflow:auto; border-top:1px solid var(--line) }
+    table { width:100%; border-collapse:collapse; text-align:left; min-width:650px }
+    th,td { padding:12px 20px; border-bottom:1px solid #202b38; white-space:nowrap }
+    th { color:#8192a4; font-size:11px; font-weight:650; letter-spacing:.1em; text-transform:uppercase }
+    td { color:#d5dee8; font-size:13px }
+    td.mono { font-family:ui-monospace,SFMono-Regular,Menlo,monospace }
+    .status { display:inline-flex; align-items:center; gap:7px; font-weight:650 }
+    .status::before { content:""; width:7px; height:7px; border-radius:50%; background:currentColor }
+    .status.failed { color:var(--red) }.status.success { color:var(--green) }
+    .empty-row { padding:30px!important; color:var(--muted); text-align:center }
+    .table-foot { display:flex; justify-content:space-between; align-items:center; gap:12px; padding:12px 20px; color:var(--muted); font-size:12px }
+    .pager { display:flex; align-items:center; gap:8px }
+    .pager .btn { padding:5px 10px; font-size:12px }
+    footer { display:flex; justify-content:space-between; gap:20px; margin-top:19px; color:#78889a; font-size:12px }
+    footer a { color:#b7c8d8 }
+    @media(max-width:850px) { .intro { align-items:flex-start; flex-direction:column }.actions { justify-content:flex-start }.grid { grid-template-columns:1fr }.metrics { grid-template-columns:repeat(2,1fr) } }
+    @media(max-width:520px) { .wrap { width:min(100% - 24px,1180px) }.topbar { height:66px }.local-badge { font-size:10px }.metrics { gap:9px }.metric { min-height:110px; padding:14px }.metric-value { font-size:27px }.section { padding:15px }.section-head { flex-direction:column; align-items:flex-start }.threshold { white-space:normal }.events .section-head { padding:0 15px }.table-foot { padding:12px 15px } footer { flex-direction:column } }
+  </style>
+</head>
+<body>
+  <header><div class="wrap topbar">
+    <div class="brand"><span class="brand-mark" aria-hidden="true">⌁</span><div>AUTHWATCH<small>SSH event explorer</small></div></div>
+    <div class="local-badge">● &nbsp;Browser-only analysis</div>
+  </div></header>
+  <main class="wrap">
+    <section class="intro">
+      <div><div class="eyebrow">Defensive security · Log analysis</div><h1>See the signals in your logs.</h1><p>Explore SSH authentication events, spot repeated failures, and inspect the source records. Start with synthetic sample data or load a log file.</p></div>
+      <div class="actions"><button class="btn" id="sampleBtn" type="button">↻ &nbsp;Load sample</button><button class="btn primary" id="uploadBtn" type="button">＋ &nbsp;Analyze a log</button><input id="fileInput" type="file" accept=".log,.txt,text/plain"></div>
+    </section>
+    <div class="notice" role="note"><span class="icon" aria-hidden="true">ⓘ</span><span><b>Privacy by design:</b> Log contents are parsed in this browser tab. Files are not uploaded or saved. Use only logs you’re authorized to inspect. The included sample is synthetic and uses documentation-only IP addresses.</span></div>
+    <section class="metrics" aria-label="Summary metrics">
+      <article class="card metric"><div class="metric-label">Events parsed <span class="signal">▤</span></div><div class="metric-value" id="totalMetric">—</div><div class="metric-note">Recognized SSH records</div></article>
+      <article class="card metric alert"><div class="metric-label">Failed logins <span class="signal">↘</span></div><div class="metric-value" id="failedMetric">—</div><div class="metric-note" id="failureRate">—</div></article>
+      <article class="card metric"><div class="metric-label">Successful logins <span class="signal">↗</span></div><div class="metric-value" id="successMetric">—</div><div class="metric-note">Accepted authentication events</div></article>
+      <article class="card metric alert"><div class="metric-label">IPs over threshold <span class="signal">!</span></div><div class="metric-value" id="flaggedMetric">—</div><div class="metric-note">Repeated failures to review</div></article>
+    </section>
+    <section class="grid">
+      <article class="card section"><div class="section-head"><div><h2>Failed attempts by source</h2><p class="sub">Top sources in the loaded records</p></div><label class="threshold" for="thresholdSelect">Flag at <select id="thresholdSelect" aria-label="Failure threshold"><option value="2">2 failures</option><option value="3" selected>3 failures</option><option value="5">5 failures</option><option value="10">10 failures</option></select></label></div><div id="chart" class="chart" role="img" aria-label="Bar chart of failed login attempts by source IP"></div></article>
+      <article class="card section"><div class="section-head"><div><h2>Sources to review</h2><p class="sub">A threshold is a review signal, not proof of an attack</p></div><span class="pill" id="alertCount">0 flagged</span></div><div id="alerts" class="alerts"></div></article>
+    </section>
+    <section class="card events"><div class="section-head"><div><h2>Authentication events</h2><p class="sub" id="fileLabel">Synthetic sample · sample_auth.log</p></div><div class="tools"><input class="search" id="searchInput" type="search" placeholder="Search user or IP…" aria-label="Search events"><select id="eventFilter" aria-label="Filter event type"><option value="all">All events</option><option value="failed">Failed only</option><option value="success">Successful only</option></select></div></div><div class="table-wrap"><table><thead><tr><th>Timestamp</th><th>Result</th><th>User</th><th>Source IP</th><th>Service</th></tr></thead><tbody id="eventRows"></tbody></table></div><div class="table-foot"><span id="rowCount">0 events</span><div class="pager"><button class="btn" id="prevBtn" type="button" aria-label="Previous page">←</button><span id="pageLabel">1 / 1</span><button class="btn" id="nextBtn" type="button" aria-label="Next page">→</button></div></div></section>
+    <footer><span>AuthWatch · Learning project · No data leaves your browser</span><span>Detection uses a simple configurable count threshold.</span></footer>
+  </main>
+  <script>
+    "use strict";
+    const sampleLog = `Oct 13 08:41:02 server sshd[2411]: Failed password for invalid user admin from 192.0.2.44 port 51001 ssh2
+Oct 13 08:41:08 server sshd[2412]: Failed password for invalid user admin from 192.0.2.44 port 51002 ssh2
+Oct 13 08:41:15 server sshd[2413]: Failed password for invalid user test from 192.0.2.44 port 51003 ssh2
+Oct 13 08:42:02 server sshd[2501]: Accepted publickey for deploy from 198.51.100.23 port 44120 ssh2
+Oct 13 08:47:39 server sshd[2510]: Failed password for root from 203.0.113.18 port 53221 ssh2
+Oct 13 08:47:46 server sshd[2511]: Failed password for root from 203.0.113.18 port 53222 ssh2
+Oct 13 08:48:01 server sshd[2512]: Failed password for root from 203.0.113.18 port 53223 ssh2
+Oct 13 08:49:17 server sshd[2520]: Accepted password for analyst from 198.51.100.72 port 43118 ssh2
+Oct 13 09:02:54 server sshd[2600]: Failed password for invalid user guest from 192.0.2.44 port 51888 ssh2
+Oct 13 09:11:20 server sshd[2625]: Accepted publickey for deploy from 198.51.100.23 port 44302 ssh2
+Oct 13 09:17:42 server sshd[2710]: Failed password for backup from 203.0.113.18 port 54121 ssh2
+Oct 13 09:18:09 server sshd[2711]: Failed password for backup from 203.0.113.18 port 54122 ssh2
+Oct 13 09:18:40 server sshd[2712]: Failed password for backup from 203.0.113.18 port 54123 ssh2
+Oct 13 09:29:12 server sshd[2804]: Accepted publickey for analyst from 198.51.100.72 port 45219 ssh2
+Oct 13 09:38:55 server sshd[2910]: Failed password for invalid user oracle from 192.0.2.99 port 55070 ssh2
+Oct 13 09:40:02 server sshd[2919]: Connection closed by authenticating user root 192.0.2.99 port 55071 [preauth]
+Oct 13 09:52:16 server sshd[3010]: Failed password for root from 192.0.2.99 port 55902 ssh2
+Oct 13 10:07:30 server sshd[3155]: Accepted password for analyst from 198.51.100.72 port 49001 ssh2`;
+    const state = { events: [], page: 1, pageSize: 8, fileName: "Synthetic sample · sample_auth.log", unknown: 0 };
+    const $ = (id) => document.getElementById(id);
+    function parseLog(text) {
+      const events = []; let unknown = 0;
+      const re = /^(\w{3}\s+\d{1,2}\s+\d{2}:\d{2}:\d{2})\s+\S+\s+sshd(?:\[\d+\])?:\s+(Accepted|Failed)\s+(\S+)\s+for\s+(?:(?:invalid user)\s+)?(\S+)\s+from\s+(\d{1,3}(?:\.\d{1,3}){3})\s+port\s+(\d+)\s+ssh2\b/i;
+      for (const line of text.split(/\r?\n/)) {
+        const m = line.match(re); if (!m) { if (line.trim()) unknown++; continue; }
+        const octets = m[5].split(".").map(Number);
+        if (octets.some(n => n > 255)) { unknown++; continue; }
+        events.push({ timestamp: m[1].replace(/\s+/g," "), result: m[2].toLowerCase() === "failed" ? "failed" : "success", method: m[3], user: m[4], ip: m[5], service: "SSH" });
+      }
+      return {events, unknown};
+    }
+    function counts() { const map = new Map(); for (const e of state.events) if (e.result === "failed") map.set(e.ip, (map.get(e.ip)||0)+1); return [...map].sort((a,b)=>b[1]-a[1]); }
+    function render() {
+      const fails=state.events.filter(e=>e.result==="failed").length, successes=state.events.length-fails, threshold=Number($("thresholdSelect").value), ipCounts=counts(), flagged=ipCounts.filter(([,n])=>n>=threshold);
+      $("totalMetric").textContent=state.events.length; $("failedMetric").textContent=fails; $("successMetric").textContent=successes; $("flaggedMetric").textContent=flagged.length;
+      $("failureRate").textContent=state.events.length?`${Math.round(100*fails/state.events.length)}% of recognized events`:"No recognized events";
+      $("alertCount").textContent=`${flagged.length} flagged`;
+      const chart=$("chart"); chart.replaceChildren(); const top=ipCounts.slice(0,6), max=top[0]?.[1]||1;
+      if(!top.length){ chart.innerHTML='<div class="empty-chart">No failed login events in this file.</div>'; }
+      else for(const [ip,n] of top){ const item=document.createElement("div"); item.className="bar-item"; const val=document.createElement("span"); val.className="bar-value"; val.textContent=n; const bar=document.createElement("div"); bar.className="bar"; bar.style.height=`${Math.max(4,100*n/max)}%`; const label=document.createElement("span"); label.className="bar-label"; label.textContent=ip; label.title=ip; item.append(val,bar,label); chart.append(item); }
+      const alertBox=$("alerts"); alertBox.replaceChildren();
+      if(!flagged.length){ const empty=document.createElement("div"); empty.className="no-alert"; empty.textContent="No source has reached this threshold."; alertBox.append(empty); }
+      for(const [ip,n] of flagged){ const row=document.createElement("div"); row.className="alert-row"; const info=document.createElement("div"), addr=document.createElement("div"), hint=document.createElement("div"), pill=document.createElement("span"); addr.className="alert-ip"; addr.textContent=ip; hint.className="alert-user"; hint.textContent="Source of repeated failed logins"; info.append(addr,hint); pill.className="pill"; pill.textContent=`${n} failures`; row.append(info,pill); alertBox.append(row); }
+      renderTable();
+    }
+    function renderTable(){
+      const filter=$("eventFilter").value, query=$("searchInput").value.trim().toLowerCase();
+      const rows=state.events.filter(e=>(filter==="all"||e.result===filter)&&(!query||e.user.toLowerCase().includes(query)||e.ip.includes(query)||e.timestamp.toLowerCase().includes(query)));
+      const pages=Math.max(1,Math.ceil(rows.length/state.pageSize)); state.page=Math.min(state.page,pages); const start=(state.page-1)*state.pageSize, pageRows=rows.slice(start,start+state.pageSize), body=$("eventRows"); body.replaceChildren();
+      if(!pageRows.length){ const tr=document.createElement("tr"), td=document.createElement("td"); td.colSpan=5; td.className="empty-row"; td.textContent="No matching events. Try a different filter or load sample data."; tr.append(td); body.append(tr); }
+      for(const e of pageRows){ const tr=document.createElement("tr"); for(const [text,cls] of [[e.timestamp,"mono"],[e.result,e.result],[e.user,"mono"],[e.ip,"mono"],[e.method,""]]){const td=document.createElement("td"); if(cls==="failed"||cls==="success"){const span=document.createElement("span"); span.className=`status ${cls}`; span.textContent=cls==="failed"?"Failed":"Accepted"; td.append(span);}else{td.textContent=text; if(cls)td.className=cls;} tr.append(td);} body.append(tr); }
+      $("rowCount").textContent=`${rows.length?start+1:0}–${Math.min(start+state.pageSize,rows.length)} of ${rows.length} events${state.unknown?` · ${state.unknown} unrecognized lines`:""}`; $("pageLabel").textContent=`${state.page} / ${pages}`; $("prevBtn").disabled=state.page<=1; $("nextBtn").disabled=state.page>=pages;
+    }
+    function loadText(text,name){const parsed=parseLog(text); state.events=parsed.events; state.unknown=parsed.unknown; state.fileName=name; state.page=1; $("fileLabel").textContent=`${name} · ${parsed.events.length} recognized events`; render();}
+    $("sampleBtn").addEventListener("click",()=>loadText(sampleLog,"Synthetic sample · sample_auth.log"));
+    $("uploadBtn").addEventListener("click",()=>$("fileInput").click());
+    $("fileInput").addEventListener("change",async e=>{const file=e.target.files?.[0]; if(!file)return; if(file.size>5*1024*1024){alert("Please choose a text log smaller than 5 MB."); e.target.value=""; return;} loadText(await file.text(),`Local file · ${file.name}`); e.target.value="";});
+    $("thresholdSelect").addEventListener("change",render); $("eventFilter").addEventListener("change",()=>{state.page=1;renderTable();}); $("searchInput").addEventListener("input",()=>{state.page=1;renderTable();});
+    $("prevBtn").addEventListener("click",()=>{state.page=Math.max(1,state.page-1);renderTable();}); $("nextBtn").addEventListener("click",()=>{state.page++;renderTable();});
+    loadText(sampleLog,"Synthetic sample · sample_auth.log");
+  </script>
+</body>
+</html>
